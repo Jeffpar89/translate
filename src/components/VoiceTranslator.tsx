@@ -26,12 +26,14 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     }
   };
 
+  const lastRequestTime = useRef(0);
+
   useEffect(() => {
     const processStream = async () => {
-      // Solo procesar si hay cambios significativos y no estamos ya procesando ese fragmento
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);
         lastProcessedTranscript.current = transcript;
+        lastRequestTime.current = Date.now();
         
         let fullText = '';
         const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
@@ -44,9 +46,17 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
       }
     };
 
-    // Debounce muy corto para streaming (300ms)
-    const timer = setTimeout(processStream, 300);
-    return () => clearTimeout(timer);
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime.current;
+
+    // Si ha pasado más de 1 segundo desde la última petición, forzar traducción aunque siga hablando
+    // De lo contrario, usar un debounce corto de 400ms
+    if (timeSinceLastRequest > 1000) {
+      processStream();
+    } else {
+      const timer = setTimeout(processStream, 400);
+      return () => clearTimeout(timer);
+    }
   }, [transcript]);
 
   if (isOverlay) {
@@ -64,8 +74,16 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
                 textShadow: '2px 2px 4px rgba(0,0,0,0.8), -1px -1px 0px rgba(0,0,0,0.8), 1px -1px 0px rgba(0,0,0,0.8), -1px 1px 0px rgba(0,0,0,0.8), 1px 1px 0px rgba(0,0,0,0.8)'
               }}
             >
-              <p className="text-5xl font-display font-bold text-white tracking-tight leading-tight">
+              <p className="text-5xl font-display font-bold text-white tracking-tight leading-tight relative">
                 {translation}
+                {isTranslating && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute -right-8 top-0 w-2 h-2 bg-white rounded-full"
+                  />
+                )}
               </p>
             </motion.div>
           )}
