@@ -1,0 +1,5 @@
+{
+  "name": "Lumina Translator",
+  "description": "Real-time bidirectional translation assistant for streaming models with voice and chat support.",
+  "requestFramePermissions": ["microphone"]
+}
