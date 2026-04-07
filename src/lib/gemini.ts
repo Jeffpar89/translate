@@ -1,7 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Acceso directo según guías de AI Studio para máxima compatibilidad
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+// Acceso robusto para diferentes entornos (AI Studio y Netlify)
+const apiKey = 
+  (import.meta.env?.VITE_GEMINI_API_KEY) || 
+  (process.env.GEMINI_API_KEY) || 
+  "";
+
+const ai = new GoogleGenAI({ apiKey });
 
 export async function translate(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
   if (!text.trim()) return "";

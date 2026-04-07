@@ -64,7 +64,7 @@ export default function App() {
         {/* Header */}
         <header className="px-12 py-8 flex items-center justify-between border-b border-white/5">
           <div className="flex flex-col gap-1">
-            <h1 className="font-display text-2xl font-bold tracking-tight">Lumina Translator</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">Clique Translator</h1>
             <p className="text-xs font-mono text-white/30 uppercase tracking-widest">Streaming Assistant v1.0.4</p>
           </div>
           
