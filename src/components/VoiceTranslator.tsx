@@ -10,12 +10,12 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   const [isTranslating, setIsTranslating] = useState(false);
   const lastProcessedTranscript = useRef('');
 
-  // En modo overlay, iniciar automáticamente si es posible
+  // En modo overlay, NO iniciamos el micro. Solo escuchamos mensajes.
   useEffect(() => {
-    if (isOverlay && !isListening) {
-      startListening();
+    if (isOverlay && isListening) {
+      stopListening();
     }
-  }, [isOverlay]);
+  }, [isOverlay, isListening, stopListening]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -55,6 +55,8 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   }, [isOverlay]);
 
   useEffect(() => {
+    if (isOverlay) return; // El overlay no traduce, solo recibe
+
     const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);

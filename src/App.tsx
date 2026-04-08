@@ -70,6 +70,18 @@ export default function App() {
           
           <div className="flex items-center gap-4">
             <button 
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', 'obs');
+                navigator.clipboard.writeText(url.toString());
+                alert('Link copied! Paste this as a Browser Source in OBS.');
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all group"
+            >
+              <LayoutDashboard className="w-4 h-4 text-white/40 group-hover:text-white" />
+              <span className="text-xs font-medium">Copy OBS Link</span>
+            </button>
+            <button 
               onClick={openObsOverlay}
               className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all group"
             >
@@ -121,6 +133,23 @@ export default function App() {
                   <StatCard label="Accuracy" value="98.2%" />
                   <StatCard label="Latency" value="1.2s" />
                   <StatCard label="Words" value="1,240" />
+                </div>
+
+                <div className="mt-12 p-8 bg-white/5 border border-white/10 rounded-3xl">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Info className="w-5 h-5 text-blue-400" />
+                    How to use with OBS
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-white/60 leading-relaxed">
+                    <div className="flex flex-col gap-3">
+                      <p><strong className="text-white">1. The Overlay:</strong> Copy the OBS Link and add it as a "Browser Source" in OBS. Set the width to 1920 and height to 1080.</p>
+                      <p><strong className="text-white">2. The Controller:</strong> For the translation to sync, you must open this page inside OBS as a <strong className="text-white">Custom Browser Dock</strong> (View -&gt; Docks -&gt; Custom Browser Docks).</p>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <p><strong className="text-white">3. Why?</strong> This ensures both windows share the same "brain" (BroadcastChannel), allowing instant sync without a complex backend.</p>
+                      <p><strong className="text-white">4. Audio:</strong> Make sure your microphone is active in the Controller dock.</p>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
