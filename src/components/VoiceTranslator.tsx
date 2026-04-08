@@ -5,24 +5,23 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { translate } from '../lib/gemini';
 
 export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) {
-  const { isListening, transcript, startListening } = useSpeechRecognition();
+  const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [translation, setTranslation] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const lastProcessedTranscript = useRef('');
 
   // En modo overlay, iniciar automáticamente si es posible
   useEffect(() => {
     if (isOverlay && !isListening) {
-      recognitionRef.current = startListening();
+      startListening();
     }
   }, [isOverlay]);
 
   const toggleListening = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      stopListening();
     } else {
-      recognitionRef.current = startListening();
+      startListening();
     }
   };
 
@@ -62,6 +61,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: true });
         
         lastProcessedTranscript.current = transcript;
+        setTranslation(''); // Limpiamos la anterior para dar paso a la nueva
         
         try {
           const result = await translate(transcript, 'English', 'natural, casual, persuasive');
@@ -71,6 +71,9 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           if (!isOverlay) {
             channelRef.current?.postMessage({ type: 'translation', text: result });
           }
+
+          // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
+          resetTranscript();
         } catch (err) {
           console.error("Translation processing error:", err);
         } finally {

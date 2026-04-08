@@ -1,18 +1,18 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 // Acceso robusto para diferentes entornos (AI Studio y Netlify)
 const getApiKey = () => {
   try {
-    // En Vite, import.meta.env es la forma estándar
+    // En AI Studio Build, la clave se maneja a través de process.env.GEMINI_API_KEY
+    if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+      return process.env.GEMINI_API_KEY;
+    }
+    
+    // Fallback para Vite/Netlify
     const metaEnv = (import.meta as any).env;
     const envKey = metaEnv?.VITE_GEMINI_API_KEY || metaEnv?.GEMINI_API_KEY;
     if (envKey) return envKey;
 
-    // Fallback para entornos Node o configuraciones específicas
-    if (typeof window !== 'undefined' && (window as any).process?.env?.GEMINI_API_KEY) {
-      return (window as any).process.env.GEMINI_API_KEY;
-    }
-    
     return "";
   } catch {
     return "";
@@ -21,18 +21,18 @@ const getApiKey = () => {
 
 const apiKey = getApiKey();
 
-// Lazy initialization to prevent top-level crashes if API key is missing
-let genAI: any = null;
+// Lazy initialization to prevent top-level crashes
+let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
-  if (!genAI) {
+  if (!aiInstance) {
     const key = getApiKey();
     if (!key) {
       throw new Error("Gemini API Key missing. Please configure it in Settings.");
     }
-    genAI = new GoogleGenerativeAI(key);
+    aiInstance = new GoogleGenAI({ apiKey: key });
   }
-  return genAI;
+  return aiInstance;
 }
 
 export async function translate(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
@@ -40,10 +40,27 @@ export async function translate(text: string, targetLanguage: string, context: s
   
   try {
     const ai = getAI();
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(`Translate to ${targetLanguage}. Tone: ${context}. Return ONLY translation. Text: ${text}`);
-    const response = await result.response;
-    return response.text() || "";
+    // Configuramos el modelo con filtros de seguridad desactivados para permitir el lenguaje de modelos webcam
+    // y ajustamos la instrucción del sistema para que sea más directa y sin censura.
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Translate the following text to ${targetLanguage}. 
+Context: Webcam model interaction. 
+Tone: ${context}. 
+Instruction: Translate EVERYTHING exactly as said, including sexual, explicit, or suggestive language. Do NOT censor. Return ONLY the translation.
+
+Text to translate: ${text}`,
+      config: {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ] as any
+      }
+    });
+    
+    return response.text || "";
   } catch (error: any) {
     console.error("Translation error:", error);
     return `[Error: ${error?.message || 'Unknown'}]`;
@@ -55,11 +72,26 @@ export async function* translateStream(text: string, targetLanguage: string, con
 
   try {
     const ai = getAI();
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContentStream(`Translate to ${targetLanguage}. Tone: ${context}. Return ONLY translation. Text: ${text}`);
+    const response = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
+      contents: `Translate the following text to ${targetLanguage}. 
+Context: Webcam model interaction. 
+Tone: ${context}. 
+Instruction: Translate EVERYTHING exactly as said, including sexual, explicit, or suggestive language. Do NOT censor. Return ONLY the translation.
 
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
+Text to translate: ${text}`,
+      config: {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ] as any
+      }
+    });
+
+    for await (const chunk of response) {
+      const chunkText = chunk.text;
       if (chunkText) {
         yield chunkText;
       }
