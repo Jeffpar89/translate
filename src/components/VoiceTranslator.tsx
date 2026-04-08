@@ -37,6 +37,9 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         if (event.data.type === 'translation') {
           setTranslation(event.data.text);
         }
+        if (event.data.type === 'translating') {
+          setIsTranslating(event.data.value);
+        }
       };
     }
 
@@ -49,6 +52,8 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     const processStream = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);
+        if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: true });
+        
         lastProcessedTranscript.current = transcript;
         lastRequestTime.current = Date.now();
         
@@ -65,6 +70,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           }
         }
         setIsTranslating(false);
+        if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
       }
     };
 
@@ -98,15 +104,32 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
             >
               <p className="text-5xl font-display font-bold text-white tracking-tight leading-tight relative">
                 {translation}
+                {isTranslating && (
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute -right-8 top-0 w-2 h-2 bg-white rounded-full"
+                  />
+                )}
               </p>
             </motion.div>
           ) : (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-white/20 font-mono text-sm uppercase tracking-[0.2em]"
+              className="flex flex-col items-center gap-4"
             >
-              Waiting for Clique Controller...
+              <div className="w-12 h-12 rounded-full border-2 border-white/5 flex items-center justify-center">
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.5, 0.2] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                  className="w-3 h-3 bg-white rounded-full"
+                />
+              </div>
+              <div className="text-white/20 font-mono text-sm uppercase tracking-[0.2em]">
+                Waiting for Clique Controller...
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -123,7 +146,13 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
             <h2 className="font-display text-xl font-bold tracking-tight">Voice Assistant</h2>
-            <p className="text-xs font-mono text-white/30 uppercase tracking-widest">Real-time Speech to English</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-mono text-white/30 uppercase tracking-widest">Real-time Speech to English</p>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-500/10 rounded-full border border-blue-500/20">
+                <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
+                <span className="text-[8px] font-mono text-blue-400 uppercase tracking-tight">Sync Active</span>
+              </div>
+            </div>
           </div>
           
           <button
