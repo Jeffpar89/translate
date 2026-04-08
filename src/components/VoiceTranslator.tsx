@@ -80,8 +80,8 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
       }
     };
 
-    // Debounce de 1.5 segundos: solo traduce cuando el usuario deja de hablar
-    const timer = setTimeout(processTranslation, 1500);
+    // Debounce de 2 segundos: solo traduce cuando el usuario deja de hablar
+    const timer = setTimeout(processTranslation, 2000);
     return () => clearTimeout(timer);
   }, [transcript]);
 

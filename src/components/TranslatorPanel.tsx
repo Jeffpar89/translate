@@ -32,7 +32,7 @@ export function TranslatorPanel({ title, sourceLang, targetLang, placeholder, is
     if (isAutoTranslate) {
       const timer = setTimeout(() => {
         handleTranslate(input);
-      }, 400); // Reducido de 800ms a 400ms para mayor velocidad
+      }, 1000); // Aumentado de 400ms a 1000ms para proteger la cuota
       return () => clearTimeout(timer);
     }
   }, [input, isAutoTranslate]);
