@@ -38,16 +38,31 @@ function getAI() {
 export async function translate(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
   if (!text.trim()) return "";
   
-  try {
-    const ai = getAI();
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(`Translate to ${targetLanguage}. Tone: ${context}. Return ONLY translation. Text: ${text}`);
-    const response = await result.response;
-    return response.text() || "";
-  } catch (error: any) {
-    console.error("Translation error:", error);
-    return `[Error: ${error?.message || 'Unknown'}]`;
+  // Lista de modelos a probar en orden de preferencia
+  const models = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-2.0-flash"];
+  let lastError: any = null;
+
+  for (const modelName of models) {
+    try {
+      const ai = getAI();
+      const model = ai.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(`Translate to ${targetLanguage}. Tone: ${context}. Return ONLY translation. Text: ${text}`);
+      const response = await result.response;
+      const translatedText = response.text();
+      if (translatedText) return translatedText;
+    } catch (error: any) {
+      console.warn(`Failed with model ${modelName}:`, error?.message);
+      lastError = error;
+      // Si es un error de 404 (modelo no encontrado), intentamos el siguiente
+      if (error?.message?.includes('404') || error?.message?.includes('not found')) {
+        continue;
+      }
+      // Si es otro tipo de error (como cuota), paramos
+      break;
+    }
   }
+
+  return `[Error: ${lastError?.message || 'Unknown'}]`;
 }
 
 export async function* translateStream(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
