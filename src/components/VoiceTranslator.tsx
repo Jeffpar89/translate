@@ -30,27 +30,40 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
-    channelRef.current = new BroadcastChannel('clique-translator-sync');
-    
-    if (isOverlay) {
-      channelRef.current.onmessage = (event) => {
-        if (event.data.type === 'translation') {
-          setTranslation(event.data.text);
-        }
-        if (event.data.type === 'translating') {
-          setIsTranslating(event.data.value);
-        }
-      };
+    try {
+      channelRef.current = new BroadcastChannel('clique-translator-sync');
+      
+      if (isOverlay) {
+        channelRef.current.onmessage = (event) => {
+          if (event.data.type === 'translation') {
+            setTranslation(event.data.text);
+          }
+          if (event.data.type === 'translating') {
+            setIsTranslating(event.data.value);
+          }
+        };
+      }
+    } catch (err) {
+      console.warn("BroadcastChannel not supported or failed to initialize:", err);
     }
 
     return () => {
-      channelRef.current?.close();
+      try {
+        channelRef.current?.close();
+      } catch (err) {
+        // Ignore close errors
+      }
     };
   }, [isOverlay]);
+
+  const activeRequestRef = useRef<number>(0);
 
   useEffect(() => {
     const processStream = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
+        const requestId = Date.now();
+        activeRequestRef.current = requestId;
+        
         setIsTranslating(true);
         if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: true });
         
@@ -58,19 +71,28 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         lastRequestTime.current = Date.now();
         
         let fullText = '';
-        const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
-        
-        for await (const chunk of stream) {
-          fullText += chunk;
-          setTranslation(fullText);
+        try {
+          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
           
-          // Enviar al overlay en tiempo real
-          if (!isOverlay) {
-            channelRef.current?.postMessage({ type: 'translation', text: fullText });
+          for await (const chunk of stream) {
+            // Si hay una petición más nueva, ignorar esta
+            if (activeRequestRef.current !== requestId) return;
+            
+            fullText += chunk;
+            setTranslation(fullText);
+            
+            if (!isOverlay) {
+              channelRef.current?.postMessage({ type: 'translation', text: fullText });
+            }
+          }
+        } catch (err) {
+          console.error("Stream processing error:", err);
+        } finally {
+          if (activeRequestRef.current === requestId) {
+            setIsTranslating(false);
+            if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
           }
         }
-        setIsTranslating(false);
-        if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
       }
     };
 
