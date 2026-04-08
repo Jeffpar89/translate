@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { translateStream } from '../lib/gemini';
+import { translate } from '../lib/gemini';
 
 export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) {
   const { isListening, transcript, startListening } = useSpeechRecognition();
@@ -26,7 +26,6 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     }
   };
 
-  const lastRequestTime = useRef(0);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
@@ -56,57 +55,34 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     };
   }, [isOverlay]);
 
-  const activeRequestRef = useRef<number>(0);
-
   useEffect(() => {
-    const processStream = async () => {
+    const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
-        const requestId = Date.now();
-        activeRequestRef.current = requestId;
-        
         setIsTranslating(true);
         if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: true });
         
         lastProcessedTranscript.current = transcript;
-        lastRequestTime.current = Date.now();
         
-        let fullText = '';
         try {
-          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
+          const result = await translate(transcript, 'English', 'natural, casual, persuasive');
           
-          for await (const chunk of stream) {
-            // Si hay una petición más nueva, ignorar esta
-            if (activeRequestRef.current !== requestId) return;
-            
-            fullText += chunk;
-            setTranslation(fullText);
-            
-            if (!isOverlay) {
-              channelRef.current?.postMessage({ type: 'translation', text: fullText });
-            }
+          setTranslation(result);
+          
+          if (!isOverlay) {
+            channelRef.current?.postMessage({ type: 'translation', text: result });
           }
         } catch (err) {
-          console.error("Stream processing error:", err);
+          console.error("Translation processing error:", err);
         } finally {
-          if (activeRequestRef.current === requestId) {
-            setIsTranslating(false);
-            if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
-          }
+          setIsTranslating(false);
+          if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
         }
       }
     };
 
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime.current;
-
-    // Si ha pasado más de 1 segundo desde la última petición, forzar traducción aunque siga hablando
-    // De lo contrario, usar un debounce corto de 400ms
-    if (timeSinceLastRequest > 1000) {
-      processStream();
-    } else {
-      const timer = setTimeout(processStream, 400);
-      return () => clearTimeout(timer);
-    }
+    // Debounce de 1.5 segundos: solo traduce cuando el usuario deja de hablar
+    const timer = setTimeout(processTranslation, 1500);
+    return () => clearTimeout(timer);
   }, [transcript]);
 
   if (isOverlay) {
