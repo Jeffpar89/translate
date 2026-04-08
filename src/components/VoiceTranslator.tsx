@@ -27,6 +27,23 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   };
 
   const lastRequestTime = useRef(0);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    channelRef.current = new BroadcastChannel('clique-translator-sync');
+    
+    if (isOverlay) {
+      channelRef.current.onmessage = (event) => {
+        if (event.data.type === 'translation') {
+          setTranslation(event.data.text);
+        }
+      };
+    }
+
+    return () => {
+      channelRef.current?.close();
+    };
+  }, [isOverlay]);
 
   useEffect(() => {
     const processStream = async () => {
@@ -41,6 +58,11 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         for await (const chunk of stream) {
           fullText += chunk;
           setTranslation(fullText);
+          
+          // Enviar al overlay en tiempo real
+          if (!isOverlay) {
+            channelRef.current?.postMessage({ type: 'translation', text: fullText });
+          }
         }
         setIsTranslating(false);
       }
@@ -63,7 +85,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     return (
       <div className="w-full max-w-4xl text-center">
         <AnimatePresence mode="wait">
-          {translation && (
+          {translation ? (
             <motion.div
               key={translation}
               initial={{ opacity: 0, y: 20 }}
@@ -76,24 +98,18 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
             >
               <p className="text-5xl font-display font-bold text-white tracking-tight leading-tight relative">
                 {translation}
-                {isTranslating && (
-                  <motion.span 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0.4, 1, 0.4] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute -right-8 top-0 w-2 h-2 bg-white rounded-full"
-                  />
-                )}
               </p>
+            </motion.div>
+          ) : (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-white/20 font-mono text-sm uppercase tracking-[0.2em]"
+            >
+              Waiting for Clique Controller...
             </motion.div>
           )}
         </AnimatePresence>
-        
-        {!isListening && (
-          <div className="mt-4 text-white/40 font-mono text-[10px] uppercase tracking-widest animate-pulse">
-            Microphone inactive - Check permissions
-          </div>
-        )}
       </div>
     );
   }
