@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Validation for OverlayData
+    function isValidOverlayData(data) {
+      return data.keys().hasAll(['text', 'updatedAt']) &&
+             data.text is string &&
+             data.text.size() < 5000 &&
+             data.updatedAt is number;
+    }
+
+    match /overlay_data/current_translation {
+      // Allow anyone to read the translation (for the OBS overlay)
+      // In a production app, you might want to restrict this with a secret key or auth
+      allow read: if true;
+      
+      // Only authenticated users can update the translation
+      allow write: if isAuthenticated() && isValidOverlayData(request.resource.data);
+    }
+  }
+}

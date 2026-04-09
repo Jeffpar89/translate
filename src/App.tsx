@@ -143,11 +143,11 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-white/60 leading-relaxed">
                     <div className="flex flex-col gap-3">
                       <p><strong className="text-white">1. The Overlay:</strong> Copy the OBS Link and add it as a "Browser Source" in OBS. Set the width to 1920 and height to 1080.</p>
-                      <p><strong className="text-white">2. The Controller:</strong> For the translation to sync, you must open this page inside OBS as a <strong className="text-white">Custom Browser Dock</strong> (View -&gt; Docks -&gt; Custom Browser Docks).</p>
+                      <p><strong className="text-white">2. Cloud Sync:</strong> The translation now travels through the cloud (Firebase). You can have the controller open in your phone, a tablet, or a separate PC, and it will update the OBS overlay instantly.</p>
                     </div>
                     <div className="flex flex-col gap-3">
-                      <p><strong className="text-white">3. Why?</strong> This ensures both windows share the same "brain" (BroadcastChannel), allowing instant sync without a complex backend.</p>
-                      <p><strong className="text-white">4. Audio:</strong> Make sure your microphone is active in the Controller dock.</p>
+                      <p><strong className="text-white">3. Professional Setup:</strong> This architecture is designed for high-performance streaming. No local network or shared browser session is required.</p>
+                      <p><strong className="text-white">4. Audio:</strong> Ensure your microphone is active in the controller window to start translating.</p>
                     </div>
                   </div>
                 </div>

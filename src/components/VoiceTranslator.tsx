@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { translate } from '../lib/gemini';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -25,33 +27,23 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     }
   };
 
-  const channelRef = useRef<BroadcastChannel | null>(null);
-
+  // Sincronización con Firebase
   useEffect(() => {
-    try {
-      channelRef.current = new BroadcastChannel('clique-translator-sync');
-      
-      if (isOverlay) {
-        channelRef.current.onmessage = (event) => {
-          if (event.data.type === 'translation') {
-            setTranslation(event.data.text);
-          }
-          if (event.data.type === 'translating') {
-            setIsTranslating(event.data.value);
-          }
-        };
-      }
-    } catch (err) {
-      console.warn("BroadcastChannel not supported or failed to initialize:", err);
+    const docRef = doc(db, 'overlay_data', 'current_translation');
+    
+    // El overlay se suscribe a los cambios
+    if (isOverlay) {
+      const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setTranslation(data.text || '');
+          setIsTranslating(data.isTranslating || false);
+        }
+      }, (error) => {
+        console.error("Firestore subscription error:", error);
+      });
+      return () => unsubscribe();
     }
-
-    return () => {
-      try {
-        channelRef.current?.close();
-      } catch (err) {
-        // Ignore close errors
-      }
-    };
   }, [isOverlay]);
 
   useEffect(() => {
@@ -60,27 +52,36 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);
-        if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: true });
+        
+        // Notificar inicio de traducción a Firebase
+        const docRef = doc(db, 'overlay_data', 'current_translation');
+        await setDoc(docRef, { 
+          isTranslating: true,
+          updatedAt: Date.now() 
+        }, { merge: true });
         
         lastProcessedTranscript.current = transcript;
-        setTranslation(''); // Limpiamos la anterior para dar paso a la nueva
+        setTranslation(''); 
         
         try {
           const result = await translate(transcript, 'English', 'natural, casual, persuasive');
           
           setTranslation(result);
           
-          if (!isOverlay) {
-            channelRef.current?.postMessage({ type: 'translation', text: result });
-          }
+          // Actualizar traducción en Firebase
+          await setDoc(docRef, { 
+            text: result,
+            isTranslating: false,
+            updatedAt: Date.now() 
+          });
 
           // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
           resetTranscript();
         } catch (err) {
           console.error("Translation processing error:", err);
+          await setDoc(docRef, { isTranslating: false }, { merge: true });
         } finally {
           setIsTranslating(false);
-          if (!isOverlay) channelRef.current?.postMessage({ type: 'translating', value: false });
         }
       }
     };
