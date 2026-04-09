@@ -10,6 +10,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
   const [translation, setTranslation] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
+  const [fontSize, setFontSize] = useState(48);
   const lastProcessedTranscript = useRef('');
 
   // En modo overlay, NO iniciamos el micro. Solo escuchamos mensajes.
@@ -38,6 +39,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           const data = docSnap.data();
           setTranslation(data.text || '');
           setIsTranslating(data.isTranslating || false);
+          if (data.fontSize) setFontSize(data.fontSize);
         }
       }, (error) => {
         console.error("Firestore subscription error:", error);
@@ -72,6 +74,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           await setDoc(docRef, { 
             text: result,
             isTranslating: false,
+            fontSize: fontSize,
             updatedAt: Date.now() 
           });
 
@@ -91,6 +94,14 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     return () => clearTimeout(timer);
   }, [transcript]);
 
+  const updateFontSize = async (newSize: number) => {
+    setFontSize(newSize);
+    if (!isOverlay) {
+      const docRef = doc(db, 'overlay_data', 'current_translation');
+      await setDoc(docRef, { fontSize: newSize }, { merge: true });
+    }
+  };
+
   if (isOverlay) {
     return (
       <div className="w-full max-w-4xl text-center">
@@ -106,7 +117,10 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
                 textShadow: '2px 2px 4px rgba(0,0,0,0.8), -1px -1px 0px rgba(0,0,0,0.8), 1px -1px 0px rgba(0,0,0,0.8), -1px 1px 0px rgba(0,0,0,0.8), 1px 1px 0px rgba(0,0,0,0.8)'
               }}
             >
-              <p className="text-5xl font-display font-bold text-white tracking-tight leading-tight relative">
+              <p 
+                className="font-display font-bold text-white tracking-tight leading-tight relative"
+                style={{ fontSize: `${fontSize}px` }}
+              >
                 {translation}
                 {isTranslating && (
                   <motion.span 
@@ -180,6 +194,20 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
               <MicOff className="w-6 h-6" />
             )}
           </button>
+        </div>
+
+        {/* Font Size Control */}
+        <div className="flex items-center gap-6 p-4 bg-white/5 rounded-2xl border border-white/5">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-white/40">Font Size</span>
+          <input 
+            type="range" 
+            min="24" 
+            max="120" 
+            value={fontSize} 
+            onChange={(e) => updateFontSize(parseInt(e.target.value))}
+            className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-white"
+          />
+          <span className="text-sm font-mono text-white/60 w-12 text-right">{fontSize}px</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 min-h-[200px]">

@@ -138,16 +138,16 @@ export default function App() {
                 <div className="mt-12 p-8 bg-white/5 border border-white/10 rounded-3xl">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                     <Info className="w-5 h-5 text-blue-400" />
-                    How to use with OBS
+                    Cómo usar con OBS
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-white/60 leading-relaxed">
                     <div className="flex flex-col gap-3">
-                      <p><strong className="text-white">1. The Overlay:</strong> Copy the OBS Link and add it as a "Browser Source" in OBS. Set the width to 1920 and height to 1080.</p>
-                      <p><strong className="text-white">2. Cloud Sync:</strong> The translation now travels through the cloud (Firebase). You can have the controller open in your phone, a tablet, or a separate PC, and it will update the OBS overlay instantly.</p>
+                      <p><strong className="text-white">1. El Overlay:</strong> Copia el "OBS Link" y añádelo como una "Fuente de Navegador" (Browser Source) en OBS. Configura el ancho a 1920 y el alto a 1080.</p>
+                      <p><strong className="text-white">2. Sincronización en la Nube:</strong> La traducción ahora viaja a través de la nube (Firebase). Puedes tener el mando abierto en tu móvil, tablet o PC, y actualizará el overlay de OBS al instante.</p>
                     </div>
                     <div className="flex flex-col gap-3">
-                      <p><strong className="text-white">3. Professional Setup:</strong> This architecture is designed for high-performance streaming. No local network or shared browser session is required.</p>
-                      <p><strong className="text-white">4. Audio:</strong> Ensure your microphone is active in the controller window to start translating.</p>
+                      <p><strong className="text-white">3. Configuración Profesional:</strong> Esta arquitectura está diseñada para streaming de alto rendimiento. No requiere red local ni sesiones de navegador compartidas.</p>
+                      <p><strong className="text-white">4. Audio:</strong> Asegúrate de que tu micrófono esté activo en la ventana del mando para comenzar a traducir.</p>
                     </div>
                   </div>
                 </div>
