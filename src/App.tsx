@@ -143,11 +143,11 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-white/60 leading-relaxed">
                     <div className="flex flex-col gap-3">
                       <p><strong className="text-white">1. El Overlay:</strong> Copia el "OBS Link" y añádelo como una "Fuente de Navegador" (Browser Source) en OBS. Configura el ancho a 1920 y el alto a 1080.</p>
-                      <p><strong className="text-white">2. Sincronización en la Nube:</strong> La traducción ahora viaja a través de la nube (Firebase). Puedes tener el mando abierto en tu móvil, tablet o PC, y actualizará el overlay de OBS al instante.</p>
+                      <p><strong className="text-white">2. Sincronización en la Nube (RTDB):</strong> La traducción ahora viaja a través de la nube usando Firebase Realtime Database. Esto permite que el mando (en Chrome) y el overlay (en OBS) se comuniquen instantáneamente sin importar que sean navegadores distintos.</p>
                     </div>
                     <div className="flex flex-col gap-3">
-                      <p><strong className="text-white">3. Configuración Profesional:</strong> Esta arquitectura está diseñada para streaming de alto rendimiento. No requiere red local ni sesiones de navegador compartidas.</p>
-                      <p><strong className="text-white">4. Audio:</strong> Asegúrate de que tu micrófono esté activo en la ventana del mando para comenzar a traducir.</p>
+                      <p><strong className="text-white">3. Sin Historial:</strong> Para tu tranquilidad y ahorro de costos, el sistema no guarda historiales. Solo se sobrescribe el último mensaje para que OBS lo muestre en vivo.</p>
+                      <p><strong className="text-white">4. Privacidad:</strong> Tus datos son efímeros y se borran automáticamente al enviar la siguiente frase.</p>
                     </div>
                   </div>
                 </div>

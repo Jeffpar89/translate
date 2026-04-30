@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { translate } from '../lib/gemini';
-import { db } from '../lib/firebase';
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { rtdb } from '../lib/firebase';
+import { ref, set, onValue, update } from 'firebase/database';
 
 export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -28,21 +28,19 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     }
   };
 
-  // Sincronización con Firebase
+  // Sincronización en la Nube vía Firebase Realtime Database (RTDB)
   useEffect(() => {
-    const docRef = doc(db, 'overlay_data', 'current_translation');
+    const syncRef = ref(rtdb, 'overlay/current');
     
-    // El overlay se suscribe a los cambios
+    // El overlay se suscribe a los cambios en tiempo real
     if (isOverlay) {
-      const unsubscribe = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setTranslation(data.text || '');
-          setIsTranslating(data.isTranslating || false);
-          if (data.fontSize) setFontSize(data.fontSize);
+      const unsubscribe = onValue(syncRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          if (data.text !== undefined) setTranslation(data.text);
+          if (data.isTranslating !== undefined) setIsTranslating(data.isTranslating);
+          if (data.fontSize !== undefined) setFontSize(data.fontSize);
         }
-      }, (error) => {
-        console.error("Firestore subscription error:", error);
       });
       return () => unsubscribe();
     }
@@ -54,13 +52,13 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);
-        
-        // Notificar inicio de traducción a Firebase
-        const docRef = doc(db, 'overlay_data', 'current_translation');
-        await setDoc(docRef, { 
+        // Notificar inicio de traducción a OBS
+        const syncRef = ref(rtdb, 'overlay/current');
+        await update(syncRef, {
           isTranslating: true,
-          updatedAt: Date.now() 
-        }, { merge: true });
+          updatedAt: Date.now()
+        });
+        // En RTDB es mejor usar update() si queremos preservar otros campos como fontSize
         
         lastProcessedTranscript.current = transcript;
         setTranslation(''); 
@@ -70,19 +68,19 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           
           setTranslation(result);
           
-          // Actualizar traducción en Firebase
-          await setDoc(docRef, { 
+          // Enviamos la traducción final al overlay vía RTDB usando update para ser atómicos
+          await update(syncRef, {
             text: result,
             isTranslating: false,
-            fontSize: fontSize,
-            updatedAt: Date.now() 
+            updatedAt: Date.now(),
+            fontSize: fontSize // Mantenemos el tamaño actual
           });
 
           // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
           resetTranscript();
         } catch (err) {
           console.error("Translation processing error:", err);
-          await setDoc(docRef, { isTranslating: false }, { merge: true });
+          await update(syncRef, { isTranslating: false });
         } finally {
           setIsTranslating(false);
         }
@@ -97,8 +95,9 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   const updateFontSize = async (newSize: number) => {
     setFontSize(newSize);
     if (!isOverlay) {
-      const docRef = doc(db, 'overlay_data', 'current_translation');
-      await setDoc(docRef, { fontSize: newSize }, { merge: true });
+      const syncRef = ref(rtdb, 'overlay/current');
+      // Usamos update para que sea un cambio parcial suave
+      await update(syncRef, { fontSize: newSize });
     }
   };
 
