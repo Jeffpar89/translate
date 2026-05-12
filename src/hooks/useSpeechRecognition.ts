@@ -37,18 +37,19 @@ export function useSpeechRecognition() {
     };
 
     recognition.onend = () => {
-      // Si el usuario quiere seguir escuchando, reiniciamos inmediatamente si el navegador lo detuvo
-      if (shouldBeListening.current && !isListening) {
+      // Si el usuario quiere seguir escuchando, reiniciamos (auto-restart para modo siempre encendido)
+      if (shouldBeListening.current) {
         try {
           recognition.start();
         } catch (e) {
-          console.warn("Failed to restart recognition:", e);
+          // Ya está encendido o error normal
         }
+      } else {
+        setIsListening(false);
       }
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
       if (event.error === 'not-allowed') {
         setError('Microphone access denied.');
         shouldBeListening.current = false;
@@ -57,14 +58,10 @@ export function useSpeechRecognition() {
     
     recognition.onresult = (event: any) => {
       let fullTranscript = '';
-
       for (let i = 0; i < event.results.length; ++i) {
         fullTranscript += event.results[i][0].transcript;
       }
-      
-      if (fullTranscript) {
-        setTranscript(fullTranscript);
-      }
+      setTranscript(fullTranscript);
     };
 
     try {
@@ -90,8 +87,15 @@ export function useSpeechRecognition() {
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
-    // En este nuevo modo, no hace falta reiniciar el micro manualmente
-    // porque al ser continuous: false, se reinicia solo al terminar la frase.
+    // Forzamos un reinicio de la sesión de reconocimiento para "limpiar el buffer" interno de la API
+    if (recognitionRef.current && shouldBeListening.current) {
+      try {
+        recognitionRef.current.stop();
+        // El reset real ocurrirá en onend -> start()
+      } catch (e) {
+        // Ignore
+      }
+    }
   }, []);
 
   return { isListening, transcript, error, startListening, stopListening, resetTranscript, setTranscript };
