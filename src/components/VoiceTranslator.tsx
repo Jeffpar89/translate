@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { translate } from '../lib/gemini';
+import { translate, translateStream } from '../lib/gemini';
 import { rtdb } from '../lib/firebase';
 import { ref, set, onValue, update } from 'firebase/database';
 
@@ -49,37 +49,46 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   useEffect(() => {
     if (isOverlay) return; // El overlay no traduce, solo recibe
 
+    // Lógica con Streaming para menor latencia (Aparece palabra por palabra en OBS)
     const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
         setIsTranslating(true);
-        // Notificar inicio de traducción a OBS
         const syncRef = ref(rtdb, 'overlay/current');
+        
+        // Notificar inicio de proceso a OBS
         await update(syncRef, {
           isTranslating: true,
           updatedAt: Date.now()
         });
-        // En RTDB es mejor usar update() si queremos preservar otros campos como fontSize
         
         lastProcessedTranscript.current = transcript;
         setTranslation(''); 
         
         try {
-          const result = await translate(transcript, 'English', 'natural, casual, persuasive');
+          let accumulatedText = '';
+          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
           
-          setTranslation(result);
+          for await (const chunk of stream) {
+            accumulatedText += chunk;
+            setTranslation(accumulatedText);
+            
+            // Sincronización en tiempo real con OBS (streaming)
+            await update(syncRef, {
+              text: accumulatedText,
+              updatedAt: Date.now()
+            });
+          }
           
-          // Enviamos la traducción final al overlay vía RTDB usando update para ser atómicos
+          // Finalización: quitamos el estado de "traduciendo"
           await update(syncRef, {
-            text: result,
             isTranslating: false,
-            updatedAt: Date.now(),
-            fontSize: fontSize // Mantenemos el tamaño actual
+            fontSize: fontSize
           });
 
-          // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
+          // Una vez traducido, reseteamos el buffer de voz
           resetTranscript();
         } catch (err) {
-          console.error("Translation processing error:", err);
+          console.error("Streaming error:", err);
           await update(syncRef, { isTranslating: false });
         } finally {
           setIsTranslating(false);
@@ -87,8 +96,28 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
       }
     };
 
-    // Debounce de 2 segundos: solo traduce cuando el usuario deja de hablar
-    const timer = setTimeout(processTranslation, 2000);
+    /** 
+     * MODO LEGACY (Sin streaming): 
+     * Si prefieres volver al modo anterior, comenta el bloque de arriba y usa este:
+     * 
+     * const processTranslationLegacy = async () => {
+     *   if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
+     *     setIsTranslating(true);
+     *     const syncRef = ref(rtdb, 'overlay/current');
+     *     await update(syncRef, { isTranslating: true, updatedAt: Date.now() });
+     *     lastProcessedTranscript.current = transcript;
+     *     try {
+     *       const result = await translate(transcript, 'English', 'natural, casual, persuasive');
+     *       setTranslation(result);
+     *       await update(syncRef, { text: result, isTranslating: false, updatedAt: Date.now(), fontSize: fontSize });
+     *       resetTranscript();
+     *     } catch (err) { await update(syncRef, { isTranslating: false }); } finally { setIsTranslating(false); }
+     *   }
+     * };
+     */
+
+    // Debounce de 1 segundo (Solicitado: 1s para menor latencia sin perder contexto)
+    const timer = setTimeout(processTranslation, 1000);
     return () => clearTimeout(timer);
   }, [transcript]);
 
