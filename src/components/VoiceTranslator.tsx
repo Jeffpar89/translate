@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { translate, translateStream } from '../lib/gemini';
+import { translate } from '../lib/gemini';
 import { rtdb } from '../lib/firebase';
-import { ref, set, onValue, update } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 
 export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) {
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
@@ -49,88 +49,47 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
   useEffect(() => {
     if (isOverlay) return; // El overlay no traduce, solo recibe
 
-    // Lógica con Streaming para menor latencia (Aparece palabra por palabra en OBS)
     const processTranslation = async () => {
       if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current && !isTranslating) {
         setIsTranslating(true);
         const syncRef = ref(rtdb, 'overlay/current');
         
-        // Notificar inicio de proceso a OBS
+        // Notificar inicio de traducción a OBS
         await update(syncRef, {
           isTranslating: true,
           updatedAt: Date.now()
         });
         
         lastProcessedTranscript.current = transcript;
-        setTranslation(''); 
         
         try {
-          let accumulatedText = '';
-          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
+          const result = await translate(transcript, 'English', 'natural, casual, persuasive');
           
-          for await (const chunk of stream) {
-            accumulatedText += chunk;
-            setTranslation(accumulatedText);
-            
-            // Sincronización en tiempo real con OBS (streaming)
-            await update(syncRef, {
-              text: accumulatedText,
-              updatedAt: Date.now()
-            });
-          }
+          setTranslation(result);
           
-          // Finalización: quitamos el estado de "traduciendo"
+          // Enviamos la traducción final al overlay vía RTDB
           await update(syncRef, {
+            text: result,
             isTranslating: false,
+            updatedAt: Date.now(),
             fontSize: fontSize
           });
 
-          // Una vez traducido, reseteamos el buffer de voz
+          // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
           resetTranscript();
         } catch (err: any) {
-          console.error("Streaming error:", err);
-          let msg = err?.message || 'Error';
-          try {
-            const parsed = JSON.parse(msg);
-            if (parsed.error?.message) msg = parsed.error.message;
-          } catch {}
-          
-          const errorDisplay = `[Error: ${msg.substring(0, 40)}]`;
-          setTranslation(errorDisplay);
-          await update(syncRef, { 
-            text: errorDisplay,
-            isTranslating: false 
-          });
+          console.error("Translation processing error:", err);
+          await update(syncRef, { isTranslating: false });
         } finally {
           setIsTranslating(false);
         }
       }
     };
 
-    /** 
-     * MODO LEGACY (Sin streaming): 
-     * Si prefieres volver al modo anterior, comenta el bloque de arriba y usa este:
-     * 
-     * const processTranslationLegacy = async () => {
-     *   if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
-     *     setIsTranslating(true);
-     *     const syncRef = ref(rtdb, 'overlay/current');
-     *     await update(syncRef, { isTranslating: true, updatedAt: Date.now() });
-     *     lastProcessedTranscript.current = transcript;
-     *     try {
-     *       const result = await translate(transcript, 'English', 'natural, casual, persuasive');
-     *       setTranslation(result);
-     *       await update(syncRef, { text: result, isTranslating: false, updatedAt: Date.now(), fontSize: fontSize });
-     *       resetTranscript();
-     *     } catch (err) { await update(syncRef, { isTranslating: false }); } finally { setIsTranslating(false); }
-     *   }
-     * };
-     */
-
-    // Debounce de 1 segundo (Solicitado: 1s para menor latencia sin perder contexto)
-    const timer = setTimeout(processTranslation, 1000);
+    // Debounce de 1.2 segundos: solicitado para no perder contexto en pausas cortas
+    const timer = setTimeout(processTranslation, 1200);
     return () => clearTimeout(timer);
-  }, [transcript]);
+  }, [transcript, fontSize, isOverlay, isTranslating, resetTranscript]);
 
   const updateFontSize = async (newSize: number) => {
     setFontSize(newSize);
