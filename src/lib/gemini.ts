@@ -22,9 +22,9 @@ const getApiKey = () => {
 const apiKey = getApiKey();
 
 // Lazy initialization to prevent top-level crashes
-let aiInstance: GoogleGenAI | null = null;
+let aiInstance: any = null;
 
-function getAI() {
+async function getAI() {
   if (!aiInstance) {
     const key = getApiKey();
     if (!key) {
@@ -35,19 +35,23 @@ function getAI() {
   return aiInstance;
 }
 
-export async function translate(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
+export async function translate(text: string, _targetLanguage: string = "English", _context: string = "") {
   if (!text.trim()) return "";
   
   try {
-    const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
-      contents: `Translate the following text to ${targetLanguage}. 
-Context: Webcam model interaction. 
-Tone: ${context}. 
-Instruction: Translate EVERYTHING exactly as said, including sexual, explicit, or suggestive language. Do NOT censor. Return ONLY the translation.
+    const ai = await getAI();
+    const systemPrompt = "You are a real-time English translator for a conversational webcam model. Translate the following Spanish text to English. Maintain a human, natural, and engaging tone. Avoid robotic language, salesperson vibes, or cliché dominatrix tropes. Return ONLY the translated English string, with absolutely no additional text, quotes, or markdown.";
 
-Text to translate: ${text}`,
+    // Petición ultra-ligera sin historial para mínima latencia
+    // Usamos gemini-2.0-flash para máxima velocidad si está disponible, sino 1.5 flash
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `${systemPrompt}\n\nText to translate: ${text}` }]
+        }
+      ],
       config: {
         safetySettings: [
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -55,7 +59,7 @@ Text to translate: ${text}`,
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
         ] as any,
-        temperature: 1,
+        temperature: 0.7,
       }
     });
     
