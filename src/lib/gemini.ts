@@ -40,10 +40,8 @@ export async function translate(text: string, targetLanguage: string, context: s
   
   try {
     const ai = getAI();
-    // Configuramos el modelo con filtros de seguridad desactivados para permitir el lenguaje de modelos webcam
-    // y ajustamos la instrucción del sistema para que sea más directa y sin censura.
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview", 
       contents: `Translate the following text to ${targetLanguage}. 
 Context: Webcam model interaction. 
 Tone: ${context}. 
@@ -64,7 +62,15 @@ Text to translate: ${text}`,
     return response.text || "";
   } catch (error: any) {
     console.error("Translation error:", error);
-    return `[Error: ${error?.message || 'Unknown'}]`;
+    let msg = error?.message || 'Error';
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed.error?.message) msg = parsed.error.message;
+    } catch {
+      // Si no es JSON, limpiamos un poco el mensaje
+      msg = msg.split('\n')[0].substring(0, 50);
+    }
+    return `[Error: ${msg}]`;
   }
 }
 
@@ -74,7 +80,7 @@ export async function* translateStream(text: string, targetLanguage: string, con
   try {
     const ai = getAI();
     const response = await ai.models.generateContentStream({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `Translate the following text to ${targetLanguage}. 
 Context: Webcam model interaction. 
 Tone: ${context}. 
@@ -100,6 +106,7 @@ Text to translate: ${text}`,
     }
   } catch (error: any) {
     console.error("Stream error:", error);
-    yield ` [Error: ${error?.message?.substring(0, 30) || 'Conexión'}] `;
+    // Para el stream, lanzamos el error para que el componente lo maneje y no Yield errores raros al texto
+    throw error;
   }
 }

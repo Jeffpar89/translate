@@ -90,7 +90,7 @@ export default function App() {
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/5">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest">Gemini Flash</span>
+              <span className="text-[10px] font-mono text-white/60 uppercase tracking-widest">Gemini 3 Flash</span>
             </div>
           </div>
         </header>

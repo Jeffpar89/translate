@@ -51,7 +51,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
 
     // Lógica con Streaming para menor latencia (Aparece palabra por palabra en OBS)
     const processTranslation = async () => {
-      if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current) {
+      if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current && !isTranslating) {
         setIsTranslating(true);
         const syncRef = ref(rtdb, 'overlay/current');
         
@@ -87,9 +87,20 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
 
           // Una vez traducido, reseteamos el buffer de voz
           resetTranscript();
-        } catch (err) {
+        } catch (err: any) {
           console.error("Streaming error:", err);
-          await update(syncRef, { isTranslating: false });
+          let msg = err?.message || 'Error';
+          try {
+            const parsed = JSON.parse(msg);
+            if (parsed.error?.message) msg = parsed.error.message;
+          } catch {}
+          
+          const errorDisplay = `[Error: ${msg.substring(0, 40)}]`;
+          setTranslation(errorDisplay);
+          await update(syncRef, { 
+            text: errorDisplay,
+            isTranslating: false 
+          });
         } finally {
           setIsTranslating(false);
         }
