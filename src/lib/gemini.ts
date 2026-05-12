@@ -73,3 +73,45 @@ Text to translate: ${text}`,
     return `[Error: ${msg}]`;
   }
 }
+
+export async function* translateStream(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
+  if (!text.trim()) return;
+
+  try {
+    const ai = getAI();
+    const response = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
+      contents: `Translate the following text to ${targetLanguage}. 
+Context: Webcam model interaction. 
+Tone: ${context}. 
+Instruction: Translate EVERYTHING exactly as said, including sexual, explicit, or suggestive language. Do NOT censor. Return ONLY the translation.
+
+Text to translate: ${text}`,
+      config: {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ] as any,
+        temperature: 1,
+      }
+    });
+
+    for await (const chunk of response) {
+      const chunkText = chunk.text;
+      if (chunkText) {
+        yield chunkText;
+      }
+    }
+  } catch (error: any) {
+    console.error("Stream error:", error);
+    // Extraemos el mensaje de error de forma similar a la función síncrona
+    let msg = error?.message || 'Error';
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed.error?.message) msg = parsed.error.message;
+    } catch {}
+    throw new Error(msg);
+  }
+}

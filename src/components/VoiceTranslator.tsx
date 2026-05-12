@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, RefreshCw } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { translate } from '../lib/gemini';
+import { translate, translateStream } from '../lib/gemini';
 import { rtdb } from '../lib/firebase';
 import { ref, onValue, update } from 'firebase/database';
 
@@ -54,7 +54,7 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         setIsTranslating(true);
         const syncRef = ref(rtdb, 'overlay/current');
         
-        // Notificar inicio de traducción a OBS
+        // Notificar inicio de proceso a OBS
         await update(syncRef, {
           isTranslating: true,
           updatedAt: Date.now()
@@ -63,31 +63,70 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         lastProcessedTranscript.current = transcript;
         
         try {
-          const result = await translate(transcript, 'English', 'natural, casual, persuasive');
+          let accumulatedText = '';
+          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
           
-          setTranslation(result);
+          for await (const chunk of stream) {
+            accumulatedText += chunk;
+            setTranslation(accumulatedText);
+            
+            // Sincronización en tiempo real con OBS (streaming)
+            await update(syncRef, {
+              text: accumulatedText,
+              updatedAt: Date.now()
+            });
+          }
           
-          // Enviamos la traducción final al overlay vía RTDB
+          // Finalización: quitamos el estado de "traduciendo"
           await update(syncRef, {
-            text: result,
             isTranslating: false,
-            updatedAt: Date.now(),
             fontSize: fontSize
           });
 
-          // Una vez traducido, reseteamos el buffer de voz para la siguiente frase
+          // Una vez traducido, reseteamos el buffer de voz
           resetTranscript();
         } catch (err: any) {
-          console.error("Translation processing error:", err);
-          await update(syncRef, { isTranslating: false });
+          console.error("Streaming error:", err);
+          let msg = err?.message || 'Error';
+          try {
+            const parsed = JSON.parse(msg);
+            if (parsed.error?.message) msg = parsed.error.message;
+          } catch {}
+          
+          const errorDisplay = `[Error: ${msg.substring(0, 40)}]`;
+          setTranslation(errorDisplay);
+          await update(syncRef, { 
+            text: errorDisplay,
+            isTranslating: false 
+          });
         } finally {
           setIsTranslating(false);
         }
       }
     };
 
-    // Debounce de 1.2 segundos: solicitado para no perder contexto en pausas cortas
-    const timer = setTimeout(processTranslation, 1200);
+    /** 
+     * MODO LEGACY (Sin streaming): 
+     * Si prefieres volver al modo anterior, usa este bloque:
+     * 
+     * const processTranslationLegacy = async () => {
+     *   if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current && !isTranslating) {
+     *     setIsTranslating(true);
+     *     const syncRef = ref(rtdb, 'overlay/current');
+     *     await update(syncRef, { isTranslating: true, updatedAt: Date.now() });
+     *     lastProcessedTranscript.current = transcript;
+     *     try {
+     *       const result = await translate(transcript, 'English', 'natural, casual, persuasive');
+     *       setTranslation(result);
+     *       await update(syncRef, { text: result, isTranslating: false, updatedAt: Date.now(), fontSize: fontSize });
+     *       resetTranscript();
+     *     } catch (err: any) { await update(syncRef, { isTranslating: false }); } finally { setIsTranslating(false); }
+     *   }
+     * };
+     */
+
+    // Debounce de 1 segundo para streaming (balance entre rapidez y contexto)
+    const timer = setTimeout(processTranslation, 1000);
     return () => clearTimeout(timer);
   }, [transcript, fontSize, isOverlay, isTranslating, resetTranscript]);
 
