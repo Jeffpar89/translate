@@ -46,46 +46,59 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
     }
   }, [isOverlay]);
 
+  const currentTranslationId = useRef(0);
+
   useEffect(() => {
     if (isOverlay) return; // El overlay no traduce, solo recibe
 
     const processTranslation = async () => {
-      if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current && !isTranslating) {
-        setIsTranslating(true);
-        const syncRef = ref(rtdb, 'overlay/current');
+      // Necesitamos al menos unas pocas letras para que tenga sentido traducir
+      if (!transcript || transcript.length < 3 || transcript === lastProcessedTranscript.current) {
+        return;
+      }
+
+      // Incrementamos el ID para invalidar cualquier proceso de streaming anterior que esté en curso
+      const translationId = ++currentTranslationId.current;
+      setIsTranslating(true);
+      const syncRef = ref(rtdb, 'overlay/current');
+      
+      // Notificar inicio de proceso a OBS
+      await update(syncRef, {
+        isTranslating: true,
+        updatedAt: Date.now()
+      });
+      
+      lastProcessedTranscript.current = transcript;
+      
+      try {
+        let accumulatedText = '';
+        const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
         
-        // Notificar inicio de proceso a OBS
-        await update(syncRef, {
-          isTranslating: true,
-          updatedAt: Date.now()
-        });
-        
-        lastProcessedTranscript.current = transcript;
-        
-        try {
-          let accumulatedText = '';
-          const stream = translateStream(transcript, 'English', 'natural, casual, persuasive');
+        for await (const chunk of stream) {
+          // Si el ID cambió, significa que hay una nueva transcripción más reciente
+          // Detenemos este proceso inmediatamente para no pisar el nuevo
+          if (translationId !== currentTranslationId.current) break;
+
+          accumulatedText += chunk;
+          setTranslation(accumulatedText);
           
-          for await (const chunk of stream) {
-            accumulatedText += chunk;
-            setTranslation(accumulatedText);
-            
-            // Sincronización en tiempo real con OBS (streaming)
-            await update(syncRef, {
-              text: accumulatedText,
-              updatedAt: Date.now()
-            });
-          }
-          
-          // Finalización: quitamos el estado de "traduciendo"
+          // Sincronización en tiempo real con OBS (streaming)
+          await update(syncRef, {
+            text: accumulatedText,
+            updatedAt: Date.now()
+          });
+        }
+        
+        // Solo marcamos como finalizado si somos el proceso más reciente
+        if (translationId === currentTranslationId.current) {
           await update(syncRef, {
             isTranslating: false,
             fontSize: fontSize
           });
-
-          // Una vez traducido, reseteamos el buffer de voz
-          resetTranscript();
-        } catch (err: any) {
+        }
+      } catch (err: any) {
+        // Solo notificamos error si somos el proceso activo
+        if (translationId === currentTranslationId.current) {
           console.error("Streaming error:", err);
           let msg = err?.message || 'Error';
           try {
@@ -99,36 +112,17 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
             text: errorDisplay,
             isTranslating: false 
           });
-        } finally {
+        }
+      } finally {
+        if (translationId === currentTranslationId.current) {
           setIsTranslating(false);
         }
       }
     };
 
-    /** 
-     * MODO LEGACY (Sin streaming): 
-     * Si prefieres volver al modo anterior, usa este bloque:
-     * 
-     * const processTranslationLegacy = async () => {
-     *   if (transcript && transcript.length > 5 && transcript !== lastProcessedTranscript.current && !isTranslating) {
-     *     setIsTranslating(true);
-     *     const syncRef = ref(rtdb, 'overlay/current');
-     *     await update(syncRef, { isTranslating: true, updatedAt: Date.now() });
-     *     lastProcessedTranscript.current = transcript;
-     *     try {
-     *       const result = await translate(transcript, 'English', 'natural, casual, persuasive');
-     *       setTranslation(result);
-     *       await update(syncRef, { text: result, isTranslating: false, updatedAt: Date.now(), fontSize: fontSize });
-     *       resetTranscript();
-     *     } catch (err: any) { await update(syncRef, { isTranslating: false }); } finally { setIsTranslating(false); }
-     *   }
-     * };
-     */
-
-    // Debounce de 1 segundo para streaming (balance entre rapidez y contexto)
-    const timer = setTimeout(processTranslation, 1000);
+    const timer = setTimeout(processTranslation, 100);
     return () => clearTimeout(timer);
-  }, [transcript, fontSize, isOverlay, isTranslating, resetTranscript]);
+  }, [transcript, fontSize, isOverlay]);
 
   const updateFontSize = async (newSize: number) => {
     setFontSize(newSize);

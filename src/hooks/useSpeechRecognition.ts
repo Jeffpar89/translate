@@ -28,7 +28,7 @@ export function useSpeechRecognition() {
     // Usamos continuous: false para que el navegador nos dé frases individuales
     // y se detenga automáticamente al detectar un silencio largo.
     // Nosotros lo reiniciaremos manualmente para mantenerlo "siempre encendido".
-    recognition.continuous = false; 
+    recognition.continuous = true; 
     recognition.interimResults = true;
 
     recognition.onstart = () => {
@@ -37,16 +37,13 @@ export function useSpeechRecognition() {
     };
 
     recognition.onend = () => {
-      // Si el usuario quiere seguir escuchando, reiniciamos inmediatamente
-      if (shouldBeListening.current) {
+      // Si el usuario quiere seguir escuchando, reiniciamos inmediatamente si el navegador lo detuvo
+      if (shouldBeListening.current && !isListening) {
         try {
           recognition.start();
         } catch (e) {
           console.warn("Failed to restart recognition:", e);
-          setIsListening(false);
         }
-      } else {
-        setIsListening(false);
       }
     };
 
@@ -56,12 +53,18 @@ export function useSpeechRecognition() {
         setError('Microphone access denied.');
         shouldBeListening.current = false;
       }
-      // Otros errores como 'no-speech' son normales en modo no-continuo
     };
     
     recognition.onresult = (event: any) => {
-      const currentTranscript = event.results[0][0].transcript;
-      setTranscript(currentTranscript);
+      let fullTranscript = '';
+
+      for (let i = 0; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
+      }
+      
+      if (fullTranscript) {
+        setTranscript(fullTranscript);
+      }
     };
 
     try {
