@@ -43,7 +43,7 @@ export async function translate(text: string, targetLanguage: string, context: s
     // Configuramos el modelo con filtros de seguridad desactivados para permitir el lenguaje de modelos webcam
     // y ajustamos la instrucción del sistema para que sea más directa y sin censura.
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: `Translate the following text to ${targetLanguage}. 
 Context: Webcam model interaction. 
 Tone: ${context}. 
@@ -56,7 +56,8 @@ Text to translate: ${text}`,
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-        ] as any
+        ] as any,
+        temperature: 1,
       }
     });
     
@@ -73,7 +74,7 @@ export async function* translateStream(text: string, targetLanguage: string, con
   try {
     const ai = getAI();
     const response = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: `Translate the following text to ${targetLanguage}. 
 Context: Webcam model interaction. 
 Tone: ${context}. 
@@ -86,7 +87,8 @@ Text to translate: ${text}`,
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-        ] as any
+        ] as any,
+        temperature: 1,
       }
     });
 
