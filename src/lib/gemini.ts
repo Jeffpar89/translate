@@ -1,39 +1,75 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
+// Acceso robusto para diferentes entornos (AI Studio y Netlify)
 const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
-    return process.env.GEMINI_API_KEY;
+  try {
+    // En AI Studio Build, la clave se maneja a través de process.env.GEMINI_API_KEY
+    if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+      return process.env.GEMINI_API_KEY;
+    }
+    
+    // Fallback para Vite/Netlify
+    const metaEnv = (import.meta as any).env;
+    const envKey = metaEnv?.VITE_GEMINI_API_KEY || metaEnv?.GEMINI_API_KEY;
+    if (envKey) return envKey;
+
+    return "";
+  } catch {
+    return "";
   }
-  return (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
 };
 
 const apiKey = getApiKey();
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-export async function translate(text: string, targetLanguage: string = "English", context: string = "") {
-  if (!text.trim()) return "";
-  if (!genAI) {
-    console.error("Gemini API Key missing");
-    return "[Error: API Key missing]";
+// Lazy initialization to prevent top-level crashes
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const key = getApiKey();
+    if (!key) {
+      throw new Error("Gemini API Key missing. Please configure it in Settings.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey: key });
   }
+  return aiInstance;
+}
 
+export async function translate(text: string, targetLanguage: string, context: string = "casual, natural, persuasive") {
+  if (!text.trim()) return "";
+  
   try {
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.7,
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview", 
+      contents: `Translate the following text to ${targetLanguage}. 
+Context: Webcam model interaction. 
+Tone: ${context}. 
+Instruction: Translate EVERYTHING exactly as said, including sexual, explicit, or suggestive language. Do NOT censor. Return ONLY the translation.
+
+Text to translate: ${text}`,
+      config: {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ] as any,
+        temperature: 1,
       }
     });
-
-    const systemPrompt = "You are a real-time English translator for a conversational webcam model. Translate the following Spanish text to English. Maintain a human, natural, and engaging tone. Avoid robotic language, salesperson vibes, or cliché dominatrix tropes. Return ONLY the translated English string, with absolutely no additional text, quotes, or markdown.";
     
-    const prompt = `${systemPrompt}\n\nContext: ${context}\n\nText to translate: ${text}`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text().trim();
+    return response.text || "";
   } catch (error: any) {
     console.error("Translation error:", error);
-    return `[Error: ${error.message || "Unknown error"}]`;
+    let msg = error?.message || 'Error';
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed.error?.message) msg = parsed.error.message;
+    } catch {
+      // Si no es JSON, limpiamos un poco el mensaje
+      msg = msg.split('\n')[0].substring(0, 50);
+    }
+    return `[Error: ${msg}]`;
   }
 }
