@@ -25,10 +25,9 @@ export function useSpeechRecognition() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'es-ES';
-    // Usamos continuous: false para que el navegador nos dé frases individuales
-    // y se detenga automáticamente al detectar un silencio largo.
-    // Nosotros lo reiniciaremos manualmente para mantenerlo "siempre encendido".
-    recognition.continuous = true; 
+    // Usamos continuous: false para mejor compatibilidad en móviles.
+    // El auto-reinicio manual es más fiable que el modo continuo del navegador.
+    recognition.continuous = false; 
     recognition.interimResults = true;
 
     recognition.onstart = () => {
@@ -37,7 +36,7 @@ export function useSpeechRecognition() {
     };
 
     recognition.onend = () => {
-      // Si el usuario quiere seguir escuchando, reiniciamos (auto-restart para modo siempre encendido)
+      // Si el usuario quiere seguir escuchando, reiniciamos inmediatamente
       if (shouldBeListening.current) {
         try {
           recognition.start();
@@ -50,6 +49,7 @@ export function useSpeechRecognition() {
     };
 
     recognition.onerror = (event: any) => {
+      console.error("Speech Recognition Error:", event.error);
       if (event.error === 'not-allowed') {
         setError('Microphone access denied.');
         shouldBeListening.current = false;
@@ -57,11 +57,19 @@ export function useSpeechRecognition() {
     };
     
     recognition.onresult = (event: any) => {
-      let fullTranscript = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        fullTranscript += event.results[i][0].transcript;
+      let currentTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          currentTranscript += event.results[i][0].transcript;
+        } else {
+          // Interim results (opcional, pero ayuda a la sensación de tiempo real)
+          currentTranscript += event.results[i][0].transcript;
+        }
       }
-      setTranscript(fullTranscript);
+      
+      if (currentTranscript.trim()) {
+        setTranscript(currentTranscript);
+      }
     };
 
     try {

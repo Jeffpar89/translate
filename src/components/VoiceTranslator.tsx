@@ -56,13 +56,18 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
 
     if (transcript && transcript.trim().length > 2) {
       timerRef.current = setTimeout(async () => {
+        const textToTranslate = transcript.trim();
+        
+        // Evitamos procesar lo mismo si no ha cambiado significativamente
+        if (textToTranslate === lastProcessedTranscript.current) return;
+        
         setIsTranslating(true);
         const syncRef = ref(rtdb, 'overlay/current');
-        const textToTranslate = transcript;
 
-        // Limpiamos el buffer inmediatamente para no procesar lo mismo dos veces
-        // y para habilitar la captura de la siguiente frase sin interferencias.
+        // Limpiamos el buffer inmediatamente antes de la llamada a la API
+        // para que nuevas palabras no se mezclen con la traducción actual
         resetTranscript();
+        lastProcessedTranscript.current = textToTranslate;
         
         // Notificar inicio de traducción a OBS
         await update(syncRef, {
@@ -73,6 +78,8 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
         try {
           const result = await translate(textToTranslate, 'English', 'natural, casual, persuasive');
           
+          // Si el resultado es igual al original (y el original era español), algo falló en la lógica del modelo
+          // o es una palabra que se dice igual. Lo mostramos de todos modos pero con cuidado.
           setTranslation(result);
           
           // Enviamos la traducción final al overlay vía RTDB
@@ -87,8 +94,12 @@ export function VoiceTranslator({ isOverlay = false }: { isOverlay?: boolean }) 
           await update(syncRef, { isTranslating: false });
         } finally {
           setIsTranslating(false);
+          // Permitimos que el siguiente bloque de texto se procese tras una pequeña pausa
+          setTimeout(() => {
+            lastProcessedTranscript.current = '';
+          }, 1000);
         }
-      }, 1200); // 1.2 segundos de silencio detectado manualmente
+      }, 800); // Latencia reducida a 800ms para mayor agilidad
     }
 
     return () => {
