@@ -45,7 +45,7 @@ export async function translate(text: string, _targetLanguage: string = "English
     // Petición ultra-ligera sin historial para mínima latencia
     // Usamos gemini-2.0-flash para máxima velocidad si está disponible, sino 1.5 flash
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-flash-latest",
       contents: [
         {
           role: "user",
