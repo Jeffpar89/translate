@@ -30,7 +30,7 @@ async function getAI() {
     if (!key) {
       throw new Error("Gemini API Key missing. Please configure it in Settings.");
     }
-    aiInstance = new GoogleGenAI({ apiKey: key });
+    aiInstance = new GoogleGenAI({ apiKey: key, apiVersion: "v1" });
   }
   return aiInstance;
 }
@@ -43,9 +43,9 @@ export async function translate(text: string, _targetLanguage: string = "English
     const systemPrompt = "You are a real-time English translator for a conversational webcam model. Translate the following Spanish text to English. Maintain a human, natural, and engaging tone. Avoid robotic language, salesperson vibes, or cliché dominatrix tropes. Return ONLY the translated English string, with absolutely no additional text, quotes, or markdown.";
 
     // Petición ultra-ligera sin historial para mínima latencia
-    // Usamos gemini-2.0-flash para máxima velocidad si está disponible, sino 1.5 flash
+    // Usamos gemini-3-flash para máxima velocidad en 2026
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-3-flash",
       contents: [
         {
           role: "user",
